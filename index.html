@@ -32,6 +32,7 @@
   .card-sm p.value{font-size:18px;font-weight:500;margin:0;color:var(--txt);}
   .filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;position:sticky;top:0;background:var(--bg);padding:6px 0;z-index:5;}
   input,select,button{font-size:15px;padding:10px 12px;border-radius:var(--r2);border:1px solid var(--border2);background:var(--bg3);color:var(--txt);font-family:'DM Sans',sans-serif;}
+  button:disabled{opacity:.6;cursor:not-allowed;}
   .filtros input{flex:2;min-width:140px;}
   .filtros select{flex:1;min-width:120px;}
   .scroll-box{max-height:46vh;overflow-y:auto;}
@@ -163,7 +164,7 @@
     </div>
     <div class="modal-btns">
       <button class="btn-danger" onclick="borrarPagoActual()">Borrar</button>
-      <button class="btn-accent" onclick="guardarEdicionPago()">Guardar</button>
+      <button class="btn-accent" id="btnGuardarEditarPago" onclick="guardarEdicionPago()">Guardar</button>
     </div>
   </div>
 </div>
@@ -175,6 +176,7 @@
     <input type="text" id="buscadorAdmin" placeholder="Buscar..." oninput="renderAdminLista()" style="width:100%;margin-bottom:10px;">
     <div class="scroll-box" id="adminLista" style="max-height:35vh;"></div>
     <button class="btn-block btn-accent" style="margin-top:10px;" onclick="abrirFormPersona(null)">Agregar persona</button>
+    <button class="btn-block" style="margin-top:8px;" onclick="abrirModalPDFPersonas()">Generar PDF de personas</button>
     <button class="btn-block btn-danger oculto" id="btnFinalizarCiclo" style="margin-top:8px;" onclick="iniciarFinalizarCiclo()">Finalizar ciclo (borra a todos)</button>
     <button class="btn-block" style="margin-top:8px;" onclick="cerrarModalPersonas()">Cerrar</button>
   </div>
@@ -192,7 +194,7 @@
     <div class="campo"><label>Cuenta Nequi</label><input type="text" id="fpNequi"></div>
     <div class="modal-btns">
       <button onclick="cerrarFormPersona()">Cancelar</button>
-      <button class="btn-accent" onclick="guardarPersona()">Guardar</button>
+      <button class="btn-accent" id="btnGuardarPersona" onclick="guardarPersona()">Guardar</button>
     </div>
   </div>
 </div>
@@ -220,6 +222,20 @@
     <div class="modal-btns">
       <button onclick="cerrarModalPDF()">Cancelar</button>
       <button class="btn-accent" onclick="generarPDFAhora()">Generar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal generar PDF de personas -->
+<div class="modal-overlay oculto" id="modalPDFPersonasOverlay">
+  <div class="modal">
+    <h3>PDF de personas</h3>
+    <p class="sub" style="margin-bottom:12px;">Deja las fechas vacías para incluir a todas. Sirve, por ejemplo, para ver a quién le toca este mes.</p>
+    <div class="campo"><label>Turno desde</label><input type="date" id="pdfPersonasDesde"></div>
+    <div class="campo"><label>Turno hasta</label><input type="date" id="pdfPersonasHasta"></div>
+    <div class="modal-btns">
+      <button onclick="cerrarModalPDFPersonas()">Cancelar</button>
+      <button class="btn-accent" id="btnGenerarPDFPersonas" onclick="generarPDFPersonasAhora()">Generar</button>
     </div>
   </div>
 </div>
@@ -414,12 +430,21 @@ function abrirEditarPago(id){
   document.getElementById('modalEditarOverlay').classList.remove('oculto');
 }
 function guardarEdicionPago(){
+  var btn = document.getElementById('btnGuardarEditarPago');
+  if(btn.disabled) return;
+  var textoOriginal = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Guardando...';
   postAction('editarPago', {
     ID: pagoEditando.ID,
     Monto: document.getElementById('editMonto').value,
     Metodo: document.getElementById('editMetodo').value,
     ReceptorNombre: document.getElementById('editReceptor').value
-  }).then(function(){ document.getElementById('modalEditarOverlay').classList.add('oculto'); });
+  }).then(function(){
+    btn.disabled = false; btn.textContent = textoOriginal;
+    document.getElementById('modalEditarOverlay').classList.add('oculto');
+  }).catch(function(){
+    btn.disabled = false; btn.textContent = textoOriginal;
+  });
 }
 function borrarPagoActual(){
   abrirModalConfirm('¿Borrar este registro de pago?', function(ok){
@@ -497,16 +522,42 @@ function cerrarFormPersona(){ document.getElementById('modalFormPersonaOverlay')
 
 function guardarPersona(){
   var id = document.getElementById('fpID').value;
+  var nombre = document.getElementById('fpNombre').value.trim();
+  if(!nombre){ abrirModalConfirm('El nombre es obligatorio.', function(){}); return; }
+
+  var duplicado = estado.personas.find(function(p){
+    return p.Nombre.trim().toLowerCase() === nombre.toLowerCase() && p.ID !== id;
+  });
+
+  if(duplicado){
+    abrirModalConfirm('Ya hay una persona registrada con el nombre "'+nombre+'". Esto puede pasar si es la misma persona recibiendo dinero en varias fechas. ¿Quieres registrar otra entrada con este mismo nombre?', function(ok){
+      if(ok) ejecutarGuardadoPersona(id, nombre);
+    });
+  } else {
+    ejecutarGuardadoPersona(id, nombre);
+  }
+}
+
+function ejecutarGuardadoPersona(id, nombre){
+  var btn = document.getElementById('btnGuardarPersona');
+  if(btn.disabled) return;
+  var textoOriginal = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Guardando...';
   var datos = {
     ID: id,
-    Nombre: document.getElementById('fpNombre').value,
+    Nombre: nombre,
     LugarTrabajo: document.getElementById('fpLugar').value,
     Cuota: document.getElementById('fpCuota').value,
     FechaTurno: document.getElementById('fpFecha').value,
     CuentaNequi: document.getElementById('fpNequi').value
   };
   var accion = id ? 'updatePersona' : 'addPersona';
-  postAction(accion, datos).then(function(){ cerrarFormPersona(); renderAdminLista(); });
+  postAction(accion, datos).then(function(){
+    btn.disabled = false; btn.textContent = textoOriginal;
+    cerrarFormPersona(); renderAdminLista();
+  }).catch(function(){
+    btn.disabled = false; btn.textContent = textoOriginal;
+  });
 }
 
 // ---------- GENERAR PDF ----------
@@ -537,21 +588,56 @@ function generarPDFAhora(){
     body: JSON.stringify({action:'generarPDF', payload: payload})
   }).then(function(r){return r.json();}).then(function(data){
     if(!data.pdfBase64){ alert('No se pudo generar el PDF'); return; }
-    var byteChars = atob(data.pdfBase64);
-    var byteNums = new Array(byteChars.length);
-    for(var i=0;i<byteChars.length;i++) byteNums[i] = byteChars.charCodeAt(i);
-    var blob = new Blob([new Uint8Array(byteNums)], {type:'application/pdf'});
-    var file = new File([blob], data.nombreArchivo, {type:'application/pdf'});
-
-    if(navigator.canShare && navigator.canShare({files:[file]})){
-      navigator.share({files:[file], title:data.nombreArchivo}).catch(function(){});
-    } else {
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url; a.download = data.nombreArchivo;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    }
+    compartirPDF(data);
     cerrarModalPDF();
+  });
+}
+
+function compartirPDF(data){
+  var byteChars = atob(data.pdfBase64);
+  var byteNums = new Array(byteChars.length);
+  for(var i=0;i<byteChars.length;i++) byteNums[i] = byteChars.charCodeAt(i);
+  var blob = new Blob([new Uint8Array(byteNums)], {type:'application/pdf'});
+  var file = new File([blob], data.nombreArchivo, {type:'application/pdf'});
+
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    navigator.share({files:[file], title:data.nombreArchivo}).catch(function(){});
+  } else {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = data.nombreArchivo;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+}
+
+// ---------- PDF DE PERSONAS ----------
+function abrirModalPDFPersonas(){
+  document.getElementById('pdfPersonasDesde').value = '';
+  document.getElementById('pdfPersonasHasta').value = '';
+  document.getElementById('modalPDFPersonasOverlay').classList.remove('oculto');
+}
+function cerrarModalPDFPersonas(){ document.getElementById('modalPDFPersonasOverlay').classList.add('oculto'); }
+
+function generarPDFPersonasAhora(){
+  var btn = document.getElementById('btnGenerarPDFPersonas');
+  if(btn.disabled) return;
+  var textoOriginal = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Generando...';
+  var payload = {
+    desde: document.getElementById('pdfPersonasDesde').value,
+    hasta: document.getElementById('pdfPersonasHasta').value
+  };
+  fetch(CONFIG.API_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify({action:'generarPDFPersonas', payload: payload})
+  }).then(function(r){return r.json();}).then(function(data){
+    btn.disabled = false; btn.textContent = textoOriginal;
+    if(!data.pdfBase64){ alert('No se pudo generar el PDF'); return; }
+    compartirPDF(data);
+    cerrarModalPDFPersonas();
+  }).catch(function(){
+    btn.disabled = false; btn.textContent = textoOriginal;
   });
 }
 </script>
