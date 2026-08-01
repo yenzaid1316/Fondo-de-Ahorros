@@ -102,10 +102,7 @@
 
     <div class="scroll-box" id="listaPersonas"></div>
 
-    <h3 class="section">Último pago</h3>
-    <p id="ultimoPago" class="sub">Aún no hay pagos registrados hoy.</p>
-
-    <h3 class="section">Historial de hoy</h3>
+    <h3 class="section">Historial</h3>
     <div class="scroll-box-small" id="historial"></div>
 
     <div class="acciones">
@@ -136,6 +133,10 @@
       <label>¿A quién le pagó por Nequi?</label>
       <select id="selectReceptor"></select>
     </div>
+    <div class="campo oculto" id="campoNequiOrigenPago">
+      <label>Cuenta o titular Nequi de quien envió (opcional)</label>
+      <input type="text" id="inputNequiOrigenPago" placeholder="Ej: 300 123 4567 - Juan Pérez">
+    </div>
     <div class="modal-btns">
       <button onclick="cerrarModalPago()">Cancelar</button>
       <button class="btn-accent" onclick="confirmarPago()">Sí, confirmar</button>
@@ -153,7 +154,7 @@
     </div>
     <div class="campo">
       <label>Método</label>
-      <select id="editMetodo">
+      <select id="editMetodo" onchange="toggleCamposEditMetodo()">
         <option value="Efectivo">Efectivo</option>
         <option value="Nequi">Nequi</option>
       </select>
@@ -161,6 +162,10 @@
     <div class="campo" id="campoEditReceptor">
       <label>Recibió (si es Nequi)</label>
       <select id="editReceptor"></select>
+    </div>
+    <div class="campo" id="campoEditNequiOrigen">
+      <label>Cuenta o titular Nequi de quien envió (opcional)</label>
+      <input type="text" id="editNequiOrigen">
     </div>
     <div class="modal-btns">
       <button class="btn-danger" onclick="borrarPagoActual()">Borrar</button>
@@ -189,8 +194,13 @@
     <input type="hidden" id="fpID">
     <div class="campo"><label>Nombre</label><input type="text" id="fpNombre"></div>
     <div class="campo"><label>Lugar de trabajo</label><input type="text" id="fpLugar"></div>
-    <div class="campo"><label>Valor que debe entregar cada jueves</label><input type="number" id="fpCuota"></div>
-    <div class="campo"><label>Fecha en que recibirá el dinero</label><input type="date" id="fpFecha"></div>
+    <div class="campo"><label>Cuota base (valor por cada fecha asignada)</label><input type="number" id="fpCuota" oninput="actualizarCuotaTotalPreview()"></div>
+    <div class="campo">
+      <label>Fechas en que recibirá el dinero</label>
+      <div id="fpFechasContainer"></div>
+      <button type="button" style="margin-top:4px;" onclick="agregarCampoFecha('')">+ Agregar fecha</button>
+    </div>
+    <p class="sub" id="fpCuotaTotalPreview" style="margin-bottom:12px;"></p>
     <div class="campo"><label>Cuenta Nequi</label><input type="text" id="fpNequi"></div>
     <div class="modal-btns">
       <button onclick="cerrarFormPersona()">Cancelar</button>
@@ -248,7 +258,7 @@ var CONFIG = {
 };
 // =================================================
 
-var estado = { personas: [], pagosHoy: [], receptoresHoy: [], cicloTerminado: false, hoy: '' };
+var estado = { personas: [], pagosHoy: [], receptoresHoy: [], turnoFecha: null, cicloTerminado: false, hoy: '' };
 var pagoEnCurso = null; // {persona, metodo}
 var confirmCallback = null;
 
@@ -289,6 +299,12 @@ function postAction(action, payload){
 
 // ---------- UTILIDADES ----------
 function fmt(n){ return '$' + Number(n||0).toLocaleString('es-CO'); }
+function fechaBonitaJS(str){
+  if(!str) return '';
+  var partes = String(str).split('-');
+  if(partes.length !== 3) return str;
+  return partes[2] + '/' + partes[1] + '/' + partes[0];
+}
 
 function pagoDe(personaId){
   return estado.pagosHoy.find(function(p){ return p.PersonaID === personaId; });
@@ -296,17 +312,19 @@ function pagoDe(personaId){
 
 // ---------- RENDER PRINCIPAL ----------
 function render(){
-  // receptores de hoy
+  // turno actual
   var nombresReceptores = estado.receptoresHoy.map(function(r){return r.Nombre;});
   document.getElementById('receptoresHoyTxt').textContent = nombresReceptores.length
-    ? 'Reciben hoy: ' + nombresReceptores.join(', ')
-    : 'Nadie tiene turno asignado para hoy.';
+    ? 'Turno actual (' + fechaBonitaJS(estado.turnoFecha) + '): ' + nombresReceptores.join(', ')
+    : 'No hay turnos pendientes.';
+
+  var idsReceptores = estado.receptoresHoy.map(function(r){return r.ID;});
 
   // tarjetas
   var totalEfectivo = estado.pagosHoy.filter(function(p){return p.Metodo==='Efectivo';}).reduce(function(s,p){return s+Number(p.Monto);},0);
   var totalGeneral = estado.pagosHoy.reduce(function(s,p){return s+Number(p.Monto);},0);
-  var pendientes = estado.personas.filter(function(p){return !pagoDe(p.ID);});
-  var faltantePesos = pendientes.reduce(function(s,p){return s+Number(p.Cuota||0);},0);
+  var pendientes = estado.personas.filter(function(p){return !pagoDe(p.ID) && idsReceptores.indexOf(p.ID)===-1;});
+  var faltantePesos = pendientes.reduce(function(s,p){return s+Number(p.CuotaTotal||0);},0);
 
   var cardsHtml = '<div class="card-balance"><p class="label">Total recaudado hoy</p><p class="value">'+fmt(totalGeneral)+'</p></div>';
   cardsHtml += '<div class="resumen-grid">';
@@ -336,8 +354,10 @@ function renderListaPersonas(){
   var busq = document.getElementById('buscador').value.toLowerCase();
   var lugar = document.getElementById('filtroLugar').value;
   var estadoFiltro = document.getElementById('filtroEstado').value;
+  var idsReceptores = estado.receptoresHoy.map(function(r){return r.ID;});
 
   var lista = estado.personas.filter(function(p){
+    if(idsReceptores.indexOf(p.ID) !== -1) return false;
     if(busq && p.Nombre.toLowerCase().indexOf(busq) === -1) return false;
     if(lugar && p.LugarTrabajo !== lugar) return false;
     var pago = pagoDe(p.ID);
@@ -359,7 +379,7 @@ function renderListaPersonas(){
     } else {
       pill = '<span class="pill pill-nequi">Nequi ✓ a '+pago.ReceptorNombre+'</span>';
     }
-    return '<div class="fila-persona"><div><p class="nombre">'+p.Nombre+'</p><p class="sub">'+fmt(p.Cuota)+' · '+(p.LugarTrabajo||'sin lugar')+'</p></div>'+
+    return '<div class="fila-persona"><div><p class="nombre">'+p.Nombre+'</p><p class="sub">'+fmt(p.CuotaTotal)+' · '+(p.LugarTrabajo||'sin lugar')+'</p></div>'+
       '<div style="display:flex;align-items:center;gap:6px;">'+pill+acciones+'</div></div>';
   }).join('') || '<p class="sub" style="padding:12px;">No hay personas que coincidan con el filtro.</p>';
 
@@ -368,14 +388,8 @@ function renderListaPersonas(){
 
 function renderHistorial(){
   var pagos = estado.pagosHoy.slice().reverse();
-  if(pagos.length){
-    var u = pagos[0];
-    document.getElementById('ultimoPago').textContent = u.PersonaNombre+' · '+fmt(u.Monto)+' · '+u.Metodo+(u.ReceptorNombre?' a '+u.ReceptorNombre:'')+' · '+u.Hora;
-  } else {
-    document.getElementById('ultimoPago').textContent = 'Aún no hay pagos registrados hoy.';
-  }
   document.getElementById('historial').innerHTML = pagos.map(function(p){
-    return '<div class="hist-item"><span>'+p.PersonaNombre+' · '+p.Metodo+(p.ReceptorNombre?' a '+p.ReceptorNombre:'')+' · '+p.Hora+'</span>'+
+    return '<div class="hist-item"><span>'+p.PersonaNombre+' · '+p.Metodo+(p.ReceptorNombre?' a '+p.ReceptorNombre:'')+(p.NequiOrigen?' ('+p.NequiOrigen+')':'')+' · '+fechaBonitaJS(p.Fecha)+' '+p.Hora+'</span>'+
       '<span><a href="#" onclick="abrirEditarPago(\''+p.ID+'\');return false;">Editar</a></span></div>';
   }).join('') || '<p class="sub">Sin pagos aún.</p>';
 }
@@ -396,26 +410,33 @@ function iniciarPago(personaId, metodo){
 function abrirModalPago(persona, metodo){
   pagoEnCurso = {persona: persona, metodo: metodo};
   document.getElementById('pagoTitulo').textContent = 'Confirmar pago';
-  document.getElementById('pagoDetalle').textContent = '¿Confirmas que '+persona.Nombre+' pagó '+fmt(persona.Cuota)+' en '+metodo+'?';
+  document.getElementById('pagoDetalle').textContent = '¿Confirmas que '+persona.Nombre+' pagó '+fmt(persona.CuotaTotal)+' en '+metodo+'?';
   var campoReceptor = document.getElementById('campoReceptor');
+  var campoOrigen = document.getElementById('campoNequiOrigenPago');
+  document.getElementById('inputNequiOrigenPago').value = '';
   if(metodo === 'Nequi'){
     campoReceptor.classList.remove('oculto');
+    campoOrigen.classList.remove('oculto');
     document.getElementById('selectReceptor').innerHTML = estado.receptoresHoy.map(function(r){return '<option value="'+r.Nombre+'">'+r.Nombre+'</option>';}).join('');
   } else {
     campoReceptor.classList.add('oculto');
+    campoOrigen.classList.add('oculto');
   }
   document.getElementById('modalPagoOverlay').classList.remove('oculto');
 }
 function cerrarModalPago(){ document.getElementById('modalPagoOverlay').classList.add('oculto'); pagoEnCurso = null; }
 
 function confirmarPago(){
-  var receptor = pagoEnCurso.metodo === 'Nequi' ? document.getElementById('selectReceptor').value : '';
+  var esNequi = pagoEnCurso.metodo === 'Nequi';
+  var receptor = esNequi ? document.getElementById('selectReceptor').value : '';
+  var nequiOrigen = esNequi ? document.getElementById('inputNequiOrigenPago').value : '';
   postAction('registrarPago', {
     PersonaID: pagoEnCurso.persona.ID,
     PersonaNombre: pagoEnCurso.persona.Nombre,
-    Monto: pagoEnCurso.persona.Cuota,
+    Monto: pagoEnCurso.persona.CuotaTotal,
     Metodo: pagoEnCurso.metodo,
-    ReceptorNombre: receptor
+    ReceptorNombre: receptor,
+    NequiOrigen: nequiOrigen
   }).then(function(){ cerrarModalPago(); });
 }
 
@@ -427,7 +448,14 @@ function abrirEditarPago(id){
   document.getElementById('editMetodo').value = pagoEditando.Metodo;
   document.getElementById('editReceptor').innerHTML = estado.receptoresHoy.map(function(r){return '<option value="'+r.Nombre+'">'+r.Nombre+'</option>';}).join('');
   document.getElementById('editReceptor').value = pagoEditando.ReceptorNombre || '';
+  document.getElementById('editNequiOrigen').value = pagoEditando.NequiOrigen || '';
+  toggleCamposEditMetodo();
   document.getElementById('modalEditarOverlay').classList.remove('oculto');
+}
+function toggleCamposEditMetodo(){
+  var esNequi = document.getElementById('editMetodo').value === 'Nequi';
+  document.getElementById('campoEditReceptor').classList.toggle('oculto', !esNequi);
+  document.getElementById('campoEditNequiOrigen').classList.toggle('oculto', !esNequi);
 }
 function guardarEdicionPago(){
   var btn = document.getElementById('btnGuardarEditarPago');
@@ -438,7 +466,8 @@ function guardarEdicionPago(){
     ID: pagoEditando.ID,
     Monto: document.getElementById('editMonto').value,
     Metodo: document.getElementById('editMetodo').value,
-    ReceptorNombre: document.getElementById('editReceptor').value
+    ReceptorNombre: document.getElementById('editReceptor').value,
+    NequiOrigen: document.getElementById('editNequiOrigen').value
   }).then(function(){
     btn.disabled = false; btn.textContent = textoOriginal;
     document.getElementById('modalEditarOverlay').classList.add('oculto');
@@ -458,7 +487,7 @@ function borrarPagoActual(){
 function iniciarCerrarSemana(){
   abrirModalConfirm('¿Ya generaste y guardaste los PDF de esta semana?', function(ok){
     if(!ok) return;
-    abrirModalConfirm('¿Seguro que quieres borrar los '+estado.pagosHoy.length+' registros de pago de hoy? Esta acción no se puede deshacer.', function(ok2){
+    abrirModalConfirm('¿Seguro que quieres cerrar esta semana? Esto marca como completado el turno actual y borra los '+estado.pagosHoy.length+' registros de pago acumulados. Esta acción no se puede deshacer.', function(ok2){
       if(ok2) postAction('cerrarSemana', {});
     });
   });
@@ -495,7 +524,8 @@ function renderAdminLista(){
   var lista = estado.personas.filter(function(p){return p.Nombre.toLowerCase().indexOf(busq)!==-1;})
     .sort(function(a,b){return a.Nombre.localeCompare(b.Nombre);});
   document.getElementById('adminLista').innerHTML = lista.map(function(p){
-    return '<div class="list-persona-admin"><span>'+p.Nombre+(p.YaRecibio?' (ya recibió)':'')+'</span>'+
+    var nf = p.Fechas ? p.Fechas.length : 0;
+    return '<div class="list-persona-admin"><span>'+p.Nombre+' · '+nf+(nf===1?' fecha':' fechas')+(p.Completado?' · completado':'')+'</span>'+
       '<span><a href="#" onclick="abrirFormPersona(\''+p.ID+'\');return false;">Editar</a> · '+
       '<a href="#" onclick="borrarPersonaActual(\''+p.ID+'\');return false;">Borrar</a></span></div>';
   }).join('') || '<p class="sub">Sin personas registradas.</p>';
@@ -513,12 +543,43 @@ function abrirFormPersona(id){
   document.getElementById('fpID').value = p ? p.ID : '';
   document.getElementById('fpNombre').value = p ? p.Nombre : '';
   document.getElementById('fpLugar').value = p ? p.LugarTrabajo : '';
-  document.getElementById('fpCuota').value = p ? p.Cuota : '';
-  document.getElementById('fpFecha').value = p ? p.FechaTurno : '';
+  document.getElementById('fpCuota').value = p ? p.CuotaBase : '';
   document.getElementById('fpNequi').value = p ? p.CuentaNequi : '';
+  document.getElementById('fpFechasContainer').innerHTML = '';
+  if(p && p.Fechas && p.Fechas.length){
+    p.Fechas.forEach(function(f){ agregarCampoFecha(f.Fecha); });
+  } else {
+    agregarCampoFecha('');
+  }
+  actualizarCuotaTotalPreview();
   document.getElementById('modalFormPersonaOverlay').classList.remove('oculto');
 }
 function cerrarFormPersona(){ document.getElementById('modalFormPersonaOverlay').classList.add('oculto'); }
+
+function agregarCampoFecha(valor){
+  var cont = document.getElementById('fpFechasContainer');
+  var fila = document.createElement('div');
+  fila.style.display = 'flex'; fila.style.gap = '6px'; fila.style.marginBottom = '6px';
+  var input = document.createElement('input');
+  input.type = 'date'; input.className = 'fecha-input'; input.style.flex = '1'; input.value = valor || '';
+  input.addEventListener('change', actualizarCuotaTotalPreview);
+  var btnQuitar = document.createElement('button');
+  btnQuitar.type = 'button'; btnQuitar.textContent = '×'; btnQuitar.style.padding = '8px 14px';
+  btnQuitar.onclick = function(){ fila.remove(); actualizarCuotaTotalPreview(); };
+  fila.appendChild(input); fila.appendChild(btnQuitar);
+  cont.appendChild(fila);
+  actualizarCuotaTotalPreview();
+}
+
+function obtenerFechasForm(){
+  return Array.from(document.querySelectorAll('#fpFechasContainer .fecha-input')).map(function(i){return i.value;}).filter(Boolean);
+}
+
+function actualizarCuotaTotalPreview(){
+  var base = Number(document.getElementById('fpCuota').value) || 0;
+  var n = obtenerFechasForm().length;
+  document.getElementById('fpCuotaTotalPreview').textContent = 'Cuota total cada jueves: ' + fmt(base*n) + ' (' + n + (n===1?' fecha asignada':' fechas asignadas') + ')';
+}
 
 function guardarPersona(){
   var id = document.getElementById('fpID').value;
@@ -547,8 +608,8 @@ function ejecutarGuardadoPersona(id, nombre){
     ID: id,
     Nombre: nombre,
     LugarTrabajo: document.getElementById('fpLugar').value,
-    Cuota: document.getElementById('fpCuota').value,
-    FechaTurno: document.getElementById('fpFecha').value,
+    CuotaBase: document.getElementById('fpCuota').value,
+    Fechas: obtenerFechasForm(),
     CuentaNequi: document.getElementById('fpNequi').value
   };
   var accion = id ? 'updatePersona' : 'addPersona';
