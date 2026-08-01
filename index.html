@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Control de cobros</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f0f0f; --bg2:#1a1a1a; --bg3:#242424; --bg4:#2e2e2e;
+    --border:#333; --border2:#444;
+    --txt:#f0ede8; --txt2:#c8c2bb; --txt3:#9a948d;
+    --gold:#c9a96e; --gold2:#e8c99a;
+    --green:#4caf7d; --red:#e05c5c; --amber:#d4a017;
+    --r:12px; --r2:8px;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:'DM Sans',-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:var(--bg);color:var(--txt);font-size:16.5px;}
+  a{color:var(--gold2);text-decoration:none;font-weight:500;}
+  header{padding:20px 16px 6px;}
+  header h1{font-family:'DM Serif Display',serif;font-weight:400;font-size:26px;color:var(--gold2);margin:0 0 4px;}
+  header p{font-size:14px;color:var(--txt2);margin:0;}
+  .wrap{padding:0 16px 90px;}
+  .cards{margin:14px 0;}
+  .card-balance{background:var(--bg2);border:1px solid rgba(201,169,110,.3);border-radius:var(--r);padding:18px;margin-bottom:10px;}
+  .card-balance p.label{font-size:14px;color:var(--txt2);text-transform:uppercase;letter-spacing:.05em;margin:0 0 6px;font-weight:500;}
+  .card-balance p.value{font-family:'DM Serif Display',serif;font-size:34px;color:var(--gold2);margin:0;}
+  .resumen-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;}
+  .card-sm{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:10px;text-align:center;}
+  .card-sm p.label{font-size:13px;color:var(--txt2);margin:0 0 4px;font-weight:500;}
+  .card-sm p.value{font-size:18px;font-weight:500;margin:0;color:var(--txt);}
+  .filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;position:sticky;top:0;background:var(--bg);padding:6px 0;z-index:5;}
+  input,select,button{font-size:15px;padding:10px 12px;border-radius:var(--r2);border:1px solid var(--border2);background:var(--bg3);color:var(--txt);font-family:'DM Sans',sans-serif;}
+  .filtros input{flex:2;min-width:140px;}
+  .filtros select{flex:1;min-width:120px;}
+  .scroll-box{max-height:46vh;overflow-y:auto;}
+  .scroll-box-small{max-height:180px;overflow-y:auto;}
+  .fila-persona{display:flex;justify-content:space-between;align-items:center;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;gap:8px;margin-bottom:8px;}
+  .nombre{font-size:16px;font-weight:500;margin:0;color:var(--txt);}
+  .sub{font-size:13.5px;color:var(--txt2);margin:2px 0 0;}
+  .pill{font-size:11px;padding:3px 9px;border-radius:20px;white-space:nowrap;font-weight:500;}
+  .pill-pend{background:rgba(212,160,23,.15);color:var(--amber);}
+  .pill-ok{background:rgba(76,175,125,.15);color:var(--green);}
+  .pill-nequi{background:rgba(201,169,110,.18);color:var(--gold2);}
+  .btn-mini{font-size:13px;padding:6px 10px;background:var(--bg3);border:1px solid var(--border2);color:var(--txt2);}
+  .btn-accent{background:var(--gold);color:#1a1200;border-color:var(--gold);font-weight:500;}
+  .btn-danger{background:rgba(224,92,92,.15);color:var(--red);border-color:rgba(224,92,92,.3);}
+  .btn-block{width:100%;padding:14px;font-weight:500;font-size:16px;}
+  .acciones{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
+  .acciones button{flex:1;min-width:110px;}
+  h3.section{font-size:14px;margin:18px 0 8px;color:var(--txt2);text-transform:uppercase;letter-spacing:.05em;font-weight:500;}
+  .hist-item{display:flex;justify-content:space-between;font-size:14px;padding:8px 0;border-bottom:1px solid var(--border);color:var(--txt2);}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;}
+  .modal{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:18px;max-width:420px;width:100%;max-height:85vh;overflow-y:auto;color:var(--txt);}
+  .modal h3{margin-top:0;font-family:'DM Serif Display',serif;font-weight:400;color:var(--gold2);font-size:20px;}
+  .campo{margin-bottom:12px;}
+  .campo label{display:block;font-size:13.5px;color:var(--txt2);margin-bottom:5px;font-weight:500;}
+  .campo input,.campo select{width:100%;}
+  .modal-btns{display:flex;gap:8px;margin-top:14px;}
+  .modal-btns button{flex:1;}
+  #pinScreen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center;}
+  #pinScreen h2{font-family:'DM Serif Display',serif;font-weight:400;color:var(--gold2);}
+  #pinScreen p{color:var(--txt2);}
+  #pinScreen input{font-size:24px;text-align:center;letter-spacing:8px;width:160px;}
+  .oculto{display:none !important;}
+  .list-persona-admin{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:14px;color:var(--txt2);}
+</style>
+</head>
+<body>
+
+<div id="pinScreen">
+  <h2>Control de cobros</h2>
+  <p id="pinTexto">Ingresa tu PIN</p>
+  <input type="password" id="pinInput" inputmode="numeric" maxlength="4" placeholder="----">
+  <button class="btn-accent" onclick="validarPin()">Entrar</button>
+  <p id="pinError" style="color:var(--red);font-size:13px;"></p>
+</div>
+
+<div id="app" class="oculto">
+  <header>
+    <h1>Control de cobros</h1>
+    <p id="fechaHoy"></p>
+    <p id="receptoresHoyTxt"></p>
+  </header>
+
+  <div class="wrap">
+    <div class="cards" id="cards"></div>
+
+    <div class="filtros">
+      <input type="text" id="buscador" placeholder="Buscar persona..." oninput="render()">
+      <select id="filtroLugar" onchange="render()"><option value="">Lugar: todos</option></select>
+      <select id="filtroEstado" onchange="render()">
+        <option value="">Estado: todos</option>
+        <option value="pendiente">Pendientes</option>
+        <option value="pagado">Pagados</option>
+        <option value="Efectivo">Pago efectivo</option>
+        <option value="Nequi">Pago Nequi</option>
+      </select>
+    </div>
+
+    <div class="scroll-box" id="listaPersonas"></div>
+
+    <h3 class="section">Último pago</h3>
+    <p id="ultimoPago" class="sub">Aún no hay pagos registrados hoy.</p>
+
+    <h3 class="section">Historial de hoy</h3>
+    <div class="scroll-box-small" id="historial"></div>
+
+    <div class="acciones">
+      <button onclick="abrirModalPDF()">Generar PDF</button>
+      <button onclick="abrirGestionPersonas()">Gestionar personas</button>
+      <button class="btn-danger" onclick="iniciarCerrarSemana()">Cerrar semana</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal generico de confirmacion -->
+<div class="modal-overlay oculto" id="modalConfirmOverlay">
+  <div class="modal">
+    <p id="modalConfirmTexto"></p>
+    <div class="modal-btns">
+      <button onclick="cerrarModalConfirm(false)">Cancelar</button>
+      <button class="btn-accent" id="modalConfirmBtnOk" onclick="cerrarModalConfirm(true)">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal registrar pago -->
+<div class="modal-overlay oculto" id="modalPagoOverlay">
+  <div class="modal">
+    <h3 id="pagoTitulo"></h3>
+    <p id="pagoDetalle" class="sub"></p>
+    <div class="campo oculto" id="campoReceptor">
+      <label>¿A quién le pagó por Nequi?</label>
+      <select id="selectReceptor"></select>
+    </div>
+    <div class="modal-btns">
+      <button onclick="cerrarModalPago()">Cancelar</button>
+      <button class="btn-accent" onclick="confirmarPago()">Sí, confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal editar/borrar pago -->
+<div class="modal-overlay oculto" id="modalEditarOverlay">
+  <div class="modal">
+    <h3>Editar pago</h3>
+    <div class="campo">
+      <label>Monto</label>
+      <input type="number" id="editMonto">
+    </div>
+    <div class="campo">
+      <label>Método</label>
+      <select id="editMetodo">
+        <option value="Efectivo">Efectivo</option>
+        <option value="Nequi">Nequi</option>
+      </select>
+    </div>
+    <div class="campo" id="campoEditReceptor">
+      <label>Recibió (si es Nequi)</label>
+      <select id="editReceptor"></select>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-danger" onclick="borrarPagoActual()">Borrar</button>
+      <button class="btn-accent" onclick="guardarEdicionPago()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal gestion de personas -->
+<div class="modal-overlay oculto" id="modalPersonasOverlay">
+  <div class="modal" style="max-width:520px;">
+    <h3>Gestionar personas</h3>
+    <input type="text" id="buscadorAdmin" placeholder="Buscar..." oninput="renderAdminLista()" style="width:100%;margin-bottom:10px;">
+    <div class="scroll-box" id="adminLista" style="max-height:35vh;"></div>
+    <button class="btn-block btn-accent" style="margin-top:10px;" onclick="abrirFormPersona(null)">Agregar persona</button>
+    <button class="btn-block btn-danger oculto" id="btnFinalizarCiclo" style="margin-top:8px;" onclick="iniciarFinalizarCiclo()">Finalizar ciclo (borra a todos)</button>
+    <button class="btn-block" style="margin-top:8px;" onclick="cerrarModalPersonas()">Cerrar</button>
+  </div>
+</div>
+
+<!-- Modal formulario persona -->
+<div class="modal-overlay oculto" id="modalFormPersonaOverlay">
+  <div class="modal">
+    <h3 id="formPersonaTitulo">Agregar persona</h3>
+    <input type="hidden" id="fpID">
+    <div class="campo"><label>Nombre</label><input type="text" id="fpNombre"></div>
+    <div class="campo"><label>Lugar de trabajo</label><input type="text" id="fpLugar"></div>
+    <div class="campo"><label>Valor que debe entregar cada jueves</label><input type="number" id="fpCuota"></div>
+    <div class="campo"><label>Fecha en que recibirá el dinero</label><input type="date" id="fpFecha"></div>
+    <div class="campo"><label>Cuenta Nequi</label><input type="text" id="fpNequi"></div>
+    <div class="modal-btns">
+      <button onclick="cerrarFormPersona()">Cancelar</button>
+      <button class="btn-accent" onclick="guardarPersona()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal generar PDF -->
+<div class="modal-overlay oculto" id="modalPDFOverlay">
+  <div class="modal">
+    <h3>Generar PDF</h3>
+    <div class="campo">
+      <label>Tipo de reporte</label>
+      <select id="pdfTipo" onchange="actualizarCamposPDF()">
+        <option value="todos">Todos los pagos</option>
+        <option value="efectivo">Solo efectivo</option>
+        <option value="nequi">Solo Nequi</option>
+      </select>
+    </div>
+    <div class="campo oculto" id="campoPdfReceptor">
+      <label>Filtrar por receptor (opcional)</label>
+      <select id="pdfReceptor"><option value="">Todos los receptores</option></select>
+    </div>
+    <div class="campo">
+      <label>Filtrar por persona que paga (opcional)</label>
+      <select id="pdfPersona"><option value="">Todas las personas</option></select>
+    </div>
+    <div class="modal-btns">
+      <button onclick="cerrarModalPDF()">Cancelar</button>
+      <button class="btn-accent" onclick="generarPDFAhora()">Generar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ======= CONFIGURA ESTO ANTES DE PUBLICAR =======
+var CONFIG = {
+  API_URL: 'https://script.google.com/macros/s/AKfycbwN2aMYqp4A_VqhaQ8aO65VmoR_AX-B18CBx1Vfm9yV7_C8X0l37eibkpUW6g8ErrtL/exec',
+  PIN_INICIAL: '1316' // pin por defecto la primera vez que se abre en un dispositivo
+};
+// =================================================
+
+var estado = { personas: [], pagosHoy: [], receptoresHoy: [], cicloTerminado: false, hoy: '' };
+var pagoEnCurso = null; // {persona, metodo}
+var confirmCallback = null;
+
+// ---------- PIN ----------
+function validarPin(){
+  var guardado = localStorage.getItem('cadenaPin') || CONFIG.PIN_INICIAL;
+  var ingresado = document.getElementById('pinInput').value;
+  if(ingresado === guardado){
+    if(!localStorage.getItem('cadenaPin')) localStorage.setItem('cadenaPin', guardado);
+    document.getElementById('pinScreen').classList.add('oculto');
+    document.getElementById('app').classList.remove('oculto');
+    cargarDatos();
+  } else {
+    document.getElementById('pinError').textContent = 'PIN incorrecto';
+  }
+}
+
+// ---------- CARGA DE DATOS ----------
+function cargarDatos(){
+  fetch(CONFIG.API_URL).then(function(r){return r.json();}).then(function(data){
+    Object.assign(estado, data);
+    document.getElementById('fechaHoy').textContent = estado.hoy;
+    render();
+  });
+}
+
+function postAction(action, payload){
+  return fetch(CONFIG.API_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'text/plain;charset=utf-8'},
+    body: JSON.stringify({action: action, payload: payload})
+  }).then(function(r){return r.json();}).then(function(data){
+    Object.assign(estado, data);
+    render();
+    return data;
+  });
+}
+
+// ---------- UTILIDADES ----------
+function fmt(n){ return '$' + Number(n||0).toLocaleString('es-CO'); }
+
+function pagoDe(personaId){
+  return estado.pagosHoy.find(function(p){ return p.PersonaID === personaId; });
+}
+
+// ---------- RENDER PRINCIPAL ----------
+function render(){
+  // receptores de hoy
+  var nombresReceptores = estado.receptoresHoy.map(function(r){return r.Nombre;});
+  document.getElementById('receptoresHoyTxt').textContent = nombresReceptores.length
+    ? 'Reciben hoy: ' + nombresReceptores.join(', ')
+    : 'Nadie tiene turno asignado para hoy.';
+
+  // tarjetas
+  var totalEfectivo = estado.pagosHoy.filter(function(p){return p.Metodo==='Efectivo';}).reduce(function(s,p){return s+Number(p.Monto);},0);
+  var totalGeneral = estado.pagosHoy.reduce(function(s,p){return s+Number(p.Monto);},0);
+  var pendientes = estado.personas.filter(function(p){return !pagoDe(p.ID);});
+  var faltantePesos = pendientes.reduce(function(s,p){return s+Number(p.Cuota||0);},0);
+
+  var cardsHtml = '<div class="card-balance"><p class="label">Total recaudado hoy</p><p class="value">'+fmt(totalGeneral)+'</p></div>';
+  cardsHtml += '<div class="resumen-grid">';
+  cardsHtml += '<div class="card-sm"><p class="label">Efectivo</p><p class="value">'+fmt(totalEfectivo)+'</p></div>';
+  cardsHtml += '<div class="card-sm"><p class="label">Falta por recoger</p><p class="value">'+fmt(faltantePesos)+'</p></div>';
+  estado.receptoresHoy.forEach(function(r){
+    var totalR = estado.pagosHoy.filter(function(p){return p.Metodo==='Nequi' && p.ReceptorNombre===r.Nombre;}).reduce(function(s,p){return s+Number(p.Monto);},0);
+    cardsHtml += '<div class="card-sm"><p class="label">Nequi · '+r.Nombre+'</p><p class="value">'+fmt(totalR)+'</p></div>';
+  });
+  cardsHtml += '</div>';
+  document.getElementById('cards').innerHTML = cardsHtml;
+
+  // filtro de lugares (una sola vez por cambio de datos)
+  var selectLugar = document.getElementById('filtroLugar');
+  var lugares = Array.from(new Set(estado.personas.map(function(p){return p.LugarTrabajo;}).filter(Boolean))).sort();
+  var valorActual = selectLugar.value;
+  selectLugar.innerHTML = '<option value="">Lugar: todos</option>' + lugares.map(function(l){return '<option value="'+l+'">'+l+'</option>';}).join('');
+  selectLugar.value = valorActual;
+
+  renderListaPersonas();
+  renderHistorial();
+
+  document.getElementById('btnFinalizarCiclo').classList.toggle('oculto', !estado.cicloTerminado);
+}
+
+function renderListaPersonas(){
+  var busq = document.getElementById('buscador').value.toLowerCase();
+  var lugar = document.getElementById('filtroLugar').value;
+  var estadoFiltro = document.getElementById('filtroEstado').value;
+
+  var lista = estado.personas.filter(function(p){
+    if(busq && p.Nombre.toLowerCase().indexOf(busq) === -1) return false;
+    if(lugar && p.LugarTrabajo !== lugar) return false;
+    var pago = pagoDe(p.ID);
+    if(estadoFiltro === 'pendiente' && pago) return false;
+    if(estadoFiltro === 'pagado' && !pago) return false;
+    if((estadoFiltro === 'Efectivo' || estadoFiltro === 'Nequi') && (!pago || pago.Metodo !== estadoFiltro)) return false;
+    return true;
+  }).sort(function(a,b){ return a.Nombre.localeCompare(b.Nombre); });
+
+  var html = lista.map(function(p){
+    var pago = pagoDe(p.ID);
+    var pill, acciones = '';
+    if(!pago){
+      pill = '<span class="pill pill-pend">Pendiente</span>';
+      acciones = '<button class="btn-mini" onclick="iniciarPago(\''+p.ID+'\',\'Efectivo\')">Efectivo</button>'+
+                 '<button class="btn-mini" onclick="iniciarPago(\''+p.ID+'\',\'Nequi\')">Nequi</button>';
+    } else if(pago.Metodo === 'Efectivo'){
+      pill = '<span class="pill pill-ok">Efectivo ✓</span>';
+    } else {
+      pill = '<span class="pill pill-nequi">Nequi ✓ a '+pago.ReceptorNombre+'</span>';
+    }
+    return '<div class="fila-persona"><div><p class="nombre">'+p.Nombre+'</p><p class="sub">'+fmt(p.Cuota)+' · '+(p.LugarTrabajo||'sin lugar')+'</p></div>'+
+      '<div style="display:flex;align-items:center;gap:6px;">'+pill+acciones+'</div></div>';
+  }).join('') || '<p class="sub" style="padding:12px;">No hay personas que coincidan con el filtro.</p>';
+
+  document.getElementById('listaPersonas').innerHTML = html;
+}
+
+function renderHistorial(){
+  var pagos = estado.pagosHoy.slice().reverse();
+  if(pagos.length){
+    var u = pagos[0];
+    document.getElementById('ultimoPago').textContent = u.PersonaNombre+' · '+fmt(u.Monto)+' · '+u.Metodo+(u.ReceptorNombre?' a '+u.ReceptorNombre:'')+' · '+u.Hora;
+  } else {
+    document.getElementById('ultimoPago').textContent = 'Aún no hay pagos registrados hoy.';
+  }
+  document.getElementById('historial').innerHTML = pagos.map(function(p){
+    return '<div class="hist-item"><span>'+p.PersonaNombre+' · '+p.Metodo+(p.ReceptorNombre?' a '+p.ReceptorNombre:'')+' · '+p.Hora+'</span>'+
+      '<span><a href="#" onclick="abrirEditarPago(\''+p.ID+'\');return false;">Editar</a></span></div>';
+  }).join('') || '<p class="sub">Sin pagos aún.</p>';
+}
+
+// ---------- REGISTRAR PAGO ----------
+function iniciarPago(personaId, metodo){
+  var persona = estado.personas.find(function(p){return p.ID===personaId;});
+  var pagoExistente = pagoDe(personaId);
+  if(pagoExistente){
+    abrirModalConfirm('Esta persona ya tiene un pago registrado hoy ('+pagoExistente.Metodo+', '+fmt(pagoExistente.Monto)+'). ¿Deseas registrar otro pago de todas formas?', function(ok){
+      if(ok) abrirModalPago(persona, metodo);
+    });
+  } else {
+    abrirModalPago(persona, metodo);
+  }
+}
+
+function abrirModalPago(persona, metodo){
+  pagoEnCurso = {persona: persona, metodo: metodo};
+  document.getElementById('pagoTitulo').textContent = 'Confirmar pago';
+  document.getElementById('pagoDetalle').textContent = '¿Confirmas que '+persona.Nombre+' pagó '+fmt(persona.Cuota)+' en '+metodo+'?';
+  var campoReceptor = document.getElementById('campoReceptor');
+  if(metodo === 'Nequi'){
+    campoReceptor.classList.remove('oculto');
+    document.getElementById('selectReceptor').innerHTML = estado.receptoresHoy.map(function(r){return '<option value="'+r.Nombre+'">'+r.Nombre+'</option>';}).join('');
+  } else {
+    campoReceptor.classList.add('oculto');
+  }
+  document.getElementById('modalPagoOverlay').classList.remove('oculto');
+}
+function cerrarModalPago(){ document.getElementById('modalPagoOverlay').classList.add('oculto'); pagoEnCurso = null; }
+
+function confirmarPago(){
+  var receptor = pagoEnCurso.metodo === 'Nequi' ? document.getElementById('selectReceptor').value : '';
+  postAction('registrarPago', {
+    PersonaID: pagoEnCurso.persona.ID,
+    PersonaNombre: pagoEnCurso.persona.Nombre,
+    Monto: pagoEnCurso.persona.Cuota,
+    Metodo: pagoEnCurso.metodo,
+    ReceptorNombre: receptor
+  }).then(function(){ cerrarModalPago(); });
+}
+
+// ---------- EDITAR / BORRAR PAGO ----------
+var pagoEditando = null;
+function abrirEditarPago(id){
+  pagoEditando = estado.pagosHoy.find(function(p){return p.ID===id;});
+  document.getElementById('editMonto').value = pagoEditando.Monto;
+  document.getElementById('editMetodo').value = pagoEditando.Metodo;
+  document.getElementById('editReceptor').innerHTML = estado.receptoresHoy.map(function(r){return '<option value="'+r.Nombre+'">'+r.Nombre+'</option>';}).join('');
+  document.getElementById('editReceptor').value = pagoEditando.ReceptorNombre || '';
+  document.getElementById('modalEditarOverlay').classList.remove('oculto');
+}
+function guardarEdicionPago(){
+  postAction('editarPago', {
+    ID: pagoEditando.ID,
+    Monto: document.getElementById('editMonto').value,
+    Metodo: document.getElementById('editMetodo').value,
+    ReceptorNombre: document.getElementById('editReceptor').value
+  }).then(function(){ document.getElementById('modalEditarOverlay').classList.add('oculto'); });
+}
+function borrarPagoActual(){
+  abrirModalConfirm('¿Borrar este registro de pago?', function(ok){
+    if(ok) postAction('borrarPago', {ID: pagoEditando.ID}).then(function(){
+      document.getElementById('modalEditarOverlay').classList.add('oculto');
+    });
+  });
+}
+
+// ---------- CERRAR SEMANA / FINALIZAR CICLO ----------
+function iniciarCerrarSemana(){
+  abrirModalConfirm('¿Ya generaste y guardaste los PDF de esta semana?', function(ok){
+    if(!ok) return;
+    abrirModalConfirm('¿Seguro que quieres borrar los '+estado.pagosHoy.length+' registros de pago de hoy? Esta acción no se puede deshacer.', function(ok2){
+      if(ok2) postAction('cerrarSemana', {});
+    });
+  });
+}
+
+function iniciarFinalizarCiclo(){
+  abrirModalConfirm('Todas las personas ya recibieron su turno. ¿Seguro que quieres FINALIZAR EL CICLO? Esto borra el registro completo de todas las personas para empezar de cero. Esta acción no se puede deshacer.', function(ok){
+    if(ok) postAction('finalizarCiclo', {}).then(function(){ cerrarModalPersonas(); });
+  });
+}
+
+// ---------- CONFIRM GENERICO ----------
+function abrirModalConfirm(texto, callback){
+  document.getElementById('modalConfirmTexto').textContent = texto;
+  confirmCallback = callback;
+  document.getElementById('modalConfirmOverlay').classList.remove('oculto');
+}
+function cerrarModalConfirm(ok){
+  document.getElementById('modalConfirmOverlay').classList.add('oculto');
+  if(confirmCallback) confirmCallback(ok);
+  confirmCallback = null;
+}
+
+// ---------- GESTION DE PERSONAS ----------
+function abrirGestionPersonas(){
+  document.getElementById('modalPersonasOverlay').classList.remove('oculto');
+  document.getElementById('btnFinalizarCiclo').classList.toggle('oculto', !estado.cicloTerminado);
+  renderAdminLista();
+}
+function cerrarModalPersonas(){ document.getElementById('modalPersonasOverlay').classList.add('oculto'); }
+
+function renderAdminLista(){
+  var busq = document.getElementById('buscadorAdmin').value.toLowerCase();
+  var lista = estado.personas.filter(function(p){return p.Nombre.toLowerCase().indexOf(busq)!==-1;})
+    .sort(function(a,b){return a.Nombre.localeCompare(b.Nombre);});
+  document.getElementById('adminLista').innerHTML = lista.map(function(p){
+    return '<div class="list-persona-admin"><span>'+p.Nombre+(p.YaRecibio?' (ya recibió)':'')+'</span>'+
+      '<span><a href="#" onclick="abrirFormPersona(\''+p.ID+'\');return false;">Editar</a> · '+
+      '<a href="#" onclick="borrarPersonaActual(\''+p.ID+'\');return false;">Borrar</a></span></div>';
+  }).join('') || '<p class="sub">Sin personas registradas.</p>';
+}
+
+function borrarPersonaActual(id){
+  abrirModalConfirm('¿Borrar a esta persona del listado?', function(ok){
+    if(ok) postAction('deletePersona', {ID:id}).then(renderAdminLista);
+  });
+}
+
+function abrirFormPersona(id){
+  var p = id ? estado.personas.find(function(x){return x.ID===id;}) : null;
+  document.getElementById('formPersonaTitulo').textContent = p ? 'Editar persona' : 'Agregar persona';
+  document.getElementById('fpID').value = p ? p.ID : '';
+  document.getElementById('fpNombre').value = p ? p.Nombre : '';
+  document.getElementById('fpLugar').value = p ? p.LugarTrabajo : '';
+  document.getElementById('fpCuota').value = p ? p.Cuota : '';
+  document.getElementById('fpFecha').value = p ? p.FechaTurno : '';
+  document.getElementById('fpNequi').value = p ? p.CuentaNequi : '';
+  document.getElementById('modalFormPersonaOverlay').classList.remove('oculto');
+}
+function cerrarFormPersona(){ document.getElementById('modalFormPersonaOverlay').classList.add('oculto'); }
+
+function guardarPersona(){
+  var id = document.getElementById('fpID').value;
+  var datos = {
+    ID: id,
+    Nombre: document.getElementById('fpNombre').value,
+    LugarTrabajo: document.getElementById('fpLugar').value,
+    Cuota: document.getElementById('fpCuota').value,
+    FechaTurno: document.getElementById('fpFecha').value,
+    CuentaNequi: document.getElementById('fpNequi').value
+  };
+  var accion = id ? 'updatePersona' : 'addPersona';
+  postAction(accion, datos).then(function(){ cerrarFormPersona(); renderAdminLista(); });
+}
+
+// ---------- GENERAR PDF ----------
+function abrirModalPDF(){
+  document.getElementById('pdfReceptor').innerHTML = '<option value="">Todos los receptores</option>' +
+    estado.receptoresHoy.map(function(r){return '<option value="'+r.Nombre+'">'+r.Nombre+'</option>';}).join('');
+  document.getElementById('pdfPersona').innerHTML = '<option value="">Todas las personas</option>' +
+    estado.personas.slice().sort(function(a,b){return a.Nombre.localeCompare(b.Nombre);})
+      .map(function(p){return '<option value="'+p.ID+'">'+p.Nombre+'</option>';}).join('');
+  actualizarCamposPDF();
+  document.getElementById('modalPDFOverlay').classList.remove('oculto');
+}
+function actualizarCamposPDF(){
+  var tipo = document.getElementById('pdfTipo').value;
+  document.getElementById('campoPdfReceptor').classList.toggle('oculto', tipo === 'efectivo');
+}
+function cerrarModalPDF(){ document.getElementById('modalPDFOverlay').classList.add('oculto'); }
+
+function generarPDFAhora(){
+  var payload = {
+    tipo: document.getElementById('pdfTipo').value,
+    receptor: document.getElementById('pdfReceptor').value,
+    personaId: document.getElementById('pdfPersona').value
+  };
+  fetch(CONFIG.API_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify({action:'generarPDF', payload: payload})
+  }).then(function(r){return r.json();}).then(function(data){
+    if(!data.pdfBase64){ alert('No se pudo generar el PDF'); return; }
+    var byteChars = atob(data.pdfBase64);
+    var byteNums = new Array(byteChars.length);
+    for(var i=0;i<byteChars.length;i++) byteNums[i] = byteChars.charCodeAt(i);
+    var blob = new Blob([new Uint8Array(byteNums)], {type:'application/pdf'});
+    var file = new File([blob], data.nombreArchivo, {type:'application/pdf'});
+
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      navigator.share({files:[file], title:data.nombreArchivo}).catch(function(){});
+    } else {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = data.nombreArchivo;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+    cerrarModalPDF();
+  });
+}
+</script>
+</body>
+</html>
