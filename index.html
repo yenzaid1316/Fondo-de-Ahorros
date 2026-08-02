@@ -508,8 +508,9 @@ function abrirModalConfirm(texto, callback){
 }
 function cerrarModalConfirm(ok){
   document.getElementById('modalConfirmOverlay').classList.add('oculto');
-  if(confirmCallback) confirmCallback(ok);
+  var callbackAEjecutar = confirmCallback;
   confirmCallback = null;
+  if(callbackAEjecutar) callbackAEjecutar(ok);
 }
 
 // ---------- GESTION DE PERSONAS ----------
