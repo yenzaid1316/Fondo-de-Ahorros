@@ -333,12 +333,12 @@ function render(){
   var faltantePesos = pendientes.reduce(function(s,p){return s+Number(p.CuotaTotal||0);},0);
   var pctRecolectado = totalARecoger > 0 ? Math.round((totalGeneral/totalARecoger)*100) + '% recolectado' : '—';
 
-  var cardsHtml = '<div class="card-balance"><p class="label">Total recaudado hoy</p><p class="value">'+fmt(totalGeneral)+'</p></div>';
-  cardsHtml += '<div class="resumen-grid">';
+  var cardsHtml = '<div class="resumen-grid">';
+  cardsHtml += '<div class="card-sm"><p class="label">Total a recoger</p><p class="value">'+fmt(totalARecoger)+'</p><p class="sub" style="margin-top:2px;">'+pctRecolectado+'</p></div>';
+  cardsHtml += '<div class="card-sm"><p class="label">Total recaudado</p><p class="value" style="color:var(--gold2);">'+fmt(totalGeneral)+'</p></div>';
+  cardsHtml += '<div class="card-sm"><p class="label">Falta por recoger</p><p class="value">'+fmt(faltantePesos)+'</p></div>';
   cardsHtml += '<div class="card-sm"><p class="label">Efectivo</p><p class="value">'+fmt(totalEfectivo)+'</p></div>';
   cardsHtml += '<div class="card-sm"><p class="label">Nequi</p><p class="value">'+fmt(totalNequi)+'</p></div>';
-  cardsHtml += '<div class="card-sm"><p class="label">Total a recoger</p><p class="value">'+fmt(totalARecoger)+'</p><p class="sub" style="margin-top:2px;">'+pctRecolectado+'</p></div>';
-  cardsHtml += '<div class="card-sm"><p class="label">Falta por recoger</p><p class="value">'+fmt(faltantePesos)+'</p></div>';
   estado.receptoresHoy.forEach(function(r){
     var totalR = estado.pagosHoy.filter(function(p){return p.Metodo==='Nequi' && p.ReceptorNombre===r.Nombre;}).reduce(function(s,p){return s+Number(p.Monto);},0);
     cardsHtml += '<div class="card-sm"><p class="label">Nequi · '+r.Nombre+'</p><p class="value">'+fmt(totalR)+'</p></div>';
