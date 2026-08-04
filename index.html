@@ -132,7 +132,8 @@
     <p id="pagoDetalle" class="sub"></p>
     <div class="campo oculto" id="campoReceptor">
       <label>¿A quién le pagó por Nequi?</label>
-      <select id="selectReceptor"></select>
+      <input type="text" id="selectReceptor" list="listaReceptoresDatalist" placeholder="Nombre de quien recibió">
+      <datalist id="listaReceptoresDatalist"></datalist>
     </div>
     <div class="campo oculto" id="campoNequiOrigenPago">
       <label>Cuenta o titular Nequi de quien envió (opcional)</label>
@@ -162,7 +163,7 @@
     </div>
     <div class="campo" id="campoEditReceptor">
       <label>Recibió (si es Nequi)</label>
-      <select id="editReceptor"></select>
+      <input type="text" id="editReceptor" list="listaReceptoresDatalist">
     </div>
     <div class="campo" id="campoEditNequiOrigen">
       <label>Cuenta o titular Nequi de quien envió (opcional)</label>
@@ -324,13 +325,19 @@ function render(){
 
   // tarjetas
   var totalEfectivo = estado.pagosHoy.filter(function(p){return p.Metodo==='Efectivo';}).reduce(function(s,p){return s+Number(p.Monto);},0);
+  var totalNequi = estado.pagosHoy.filter(function(p){return p.Metodo==='Nequi';}).reduce(function(s,p){return s+Number(p.Monto);},0);
   var totalGeneral = estado.pagosHoy.reduce(function(s,p){return s+Number(p.Monto);},0);
-  var pendientes = estado.personas.filter(function(p){return !pagoDe(p.ID) && idsReceptores.indexOf(p.ID)===-1;});
+  var noReceptores = estado.personas.filter(function(p){return idsReceptores.indexOf(p.ID)===-1;});
+  var totalARecoger = noReceptores.reduce(function(s,p){return s+Number(p.CuotaTotal||0);},0);
+  var pendientes = noReceptores.filter(function(p){return !pagoDe(p.ID);});
   var faltantePesos = pendientes.reduce(function(s,p){return s+Number(p.CuotaTotal||0);},0);
+  var pctRecolectado = totalARecoger > 0 ? Math.round((totalGeneral/totalARecoger)*100) + '% recolectado' : '—';
 
   var cardsHtml = '<div class="card-balance"><p class="label">Total recaudado hoy</p><p class="value">'+fmt(totalGeneral)+'</p></div>';
   cardsHtml += '<div class="resumen-grid">';
   cardsHtml += '<div class="card-sm"><p class="label">Efectivo</p><p class="value">'+fmt(totalEfectivo)+'</p></div>';
+  cardsHtml += '<div class="card-sm"><p class="label">Nequi</p><p class="value">'+fmt(totalNequi)+'</p></div>';
+  cardsHtml += '<div class="card-sm"><p class="label">Total a recoger</p><p class="value">'+fmt(totalARecoger)+'</p><p class="sub" style="margin-top:2px;">'+pctRecolectado+'</p></div>';
   cardsHtml += '<div class="card-sm"><p class="label">Falta por recoger</p><p class="value">'+fmt(faltantePesos)+'</p></div>';
   estado.receptoresHoy.forEach(function(r){
     var totalR = estado.pagosHoy.filter(function(p){return p.Metodo==='Nequi' && p.ReceptorNombre===r.Nombre;}).reduce(function(s,p){return s+Number(p.Monto);},0);
@@ -419,7 +426,8 @@ function abrirModalPago(persona, metodo){
   if(metodo === 'Nequi'){
     campoReceptor.classList.remove('oculto');
     campoOrigen.classList.remove('oculto');
-    document.getElementById('selectReceptor').innerHTML = estado.receptoresHoy.map(function(r){return '<option value="'+r.Nombre+'">'+r.Nombre+'</option>';}).join('');
+    document.getElementById('listaReceptoresDatalist').innerHTML = estado.receptoresHoy.map(function(r){return '<option value="'+r.Nombre+'">';}).join('');
+    document.getElementById('selectReceptor').value = estado.receptoresHoy.length === 1 ? estado.receptoresHoy[0].Nombre : '';
   } else {
     campoReceptor.classList.add('oculto');
     campoOrigen.classList.add('oculto');
@@ -448,7 +456,7 @@ function abrirEditarPago(id){
   pagoEditando = estado.pagosHoy.find(function(p){return p.ID===id;});
   document.getElementById('editMonto').value = pagoEditando.Monto;
   document.getElementById('editMetodo').value = pagoEditando.Metodo;
-  document.getElementById('editReceptor').innerHTML = estado.receptoresHoy.map(function(r){return '<option value="'+r.Nombre+'">'+r.Nombre+'</option>';}).join('');
+  document.getElementById('listaReceptoresDatalist').innerHTML = estado.receptoresHoy.map(function(r){return '<option value="'+r.Nombre+'">';}).join('');
   document.getElementById('editReceptor').value = pagoEditando.ReceptorNombre || '';
   document.getElementById('editNequiOrigen').value = pagoEditando.NequiOrigen || '';
   toggleCamposEditMetodo();
