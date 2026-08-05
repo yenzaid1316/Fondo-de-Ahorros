@@ -196,7 +196,7 @@
     <input type="hidden" id="fpID">
     <div class="campo"><label>Nombre</label><input type="text" id="fpNombre"></div>
     <div class="campo"><label>Lugar de trabajo</label><input type="text" id="fpLugar"></div>
-    <div class="campo"><label>Cuota base (valor por cada fecha asignada)</label><input type="number" id="fpCuota" oninput="actualizarCuotaTotalPreview()"></div>
+    <div class="campo"><label>Cuota (lo que paga cada jueves)</label><input type="number" id="fpCuota" oninput="actualizarCuotaTotalPreview()"></div>
     <div class="campo">
       <label>Fechas en que recibirá el dinero</label>
       <div id="fpFechasContainer"></div>
@@ -325,7 +325,6 @@ function render(){
 
   // tarjetas
   var totalEfectivo = estado.pagosHoy.filter(function(p){return p.Metodo==='Efectivo';}).reduce(function(s,p){return s+Number(p.Monto);},0);
-  var totalNequi = estado.pagosHoy.filter(function(p){return p.Metodo==='Nequi';}).reduce(function(s,p){return s+Number(p.Monto);},0);
   var totalGeneral = estado.pagosHoy.reduce(function(s,p){return s+Number(p.Monto);},0);
   var noReceptores = estado.personas.filter(function(p){return idsReceptores.indexOf(p.ID)===-1;});
   var totalARecoger = noReceptores.reduce(function(s,p){return s+Number(p.CuotaTotal||0);},0);
@@ -333,15 +332,21 @@ function render(){
   var faltantePesos = pendientes.reduce(function(s,p){return s+Number(p.CuotaTotal||0);},0);
   var pctRecolectado = totalARecoger > 0 ? Math.round((totalGeneral/totalARecoger)*100) + '% recolectado' : '—';
 
+  var nequiPorReceptor = {};
+  estado.pagosHoy.forEach(function(pg){
+    if(pg.Metodo === 'Nequi'){
+      var nombre = pg.ReceptorNombre || '(sin especificar)';
+      nequiPorReceptor[nombre] = (nequiPorReceptor[nombre] || 0) + Number(pg.Monto);
+    }
+  });
+
   var cardsHtml = '<div class="resumen-grid">';
   cardsHtml += '<div class="card-sm"><p class="label">Total a recoger</p><p class="value">'+fmt(totalARecoger)+'</p><p class="sub" style="margin-top:2px;">'+pctRecolectado+'</p></div>';
   cardsHtml += '<div class="card-sm"><p class="label">Total recaudado</p><p class="value" style="color:var(--gold2);">'+fmt(totalGeneral)+'</p></div>';
   cardsHtml += '<div class="card-sm"><p class="label">Falta por recoger</p><p class="value">'+fmt(faltantePesos)+'</p></div>';
   cardsHtml += '<div class="card-sm"><p class="label">Efectivo</p><p class="value">'+fmt(totalEfectivo)+'</p></div>';
-  cardsHtml += '<div class="card-sm"><p class="label">Nequi</p><p class="value">'+fmt(totalNequi)+'</p></div>';
-  estado.receptoresHoy.forEach(function(r){
-    var totalR = estado.pagosHoy.filter(function(p){return p.Metodo==='Nequi' && p.ReceptorNombre===r.Nombre;}).reduce(function(s,p){return s+Number(p.Monto);},0);
-    cardsHtml += '<div class="card-sm"><p class="label">Nequi · '+r.Nombre+'</p><p class="value">'+fmt(totalR)+'</p></div>';
+  Object.keys(nequiPorReceptor).forEach(function(nombre){
+    cardsHtml += '<div class="card-sm"><p class="label">Nequi · '+nombre+'</p><p class="value">'+fmt(nequiPorReceptor[nombre])+'</p></div>';
   });
   cardsHtml += '</div>';
   document.getElementById('cards').innerHTML = cardsHtml;
@@ -589,9 +594,10 @@ function obtenerFechasForm(){
 }
 
 function actualizarCuotaTotalPreview(){
-  var base = Number(document.getElementById('fpCuota').value) || 0;
   var n = obtenerFechasForm().length;
-  document.getElementById('fpCuotaTotalPreview').textContent = 'Cuota total cada jueves: ' + fmt(base*n) + ' (' + n + (n===1?' fecha asignada':' fechas asignadas') + ')';
+  document.getElementById('fpCuotaTotalPreview').textContent = n
+    ? (n===1 ? '1 fecha asignada' : n + ' fechas asignadas')
+    : 'Sin fechas asignadas (sigue pagando su cuota cada semana con normalidad)';
 }
 
 function guardarPersona(){
