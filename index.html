@@ -44,6 +44,7 @@
   .pill-pend{background:rgba(212,160,23,.15);color:var(--amber);}
   .pill-ok{background:rgba(76,175,125,.15);color:var(--green);}
   .pill-nequi{background:rgba(201,169,110,.18);color:var(--gold2);}
+  .pill-mixto{background:rgba(201,169,110,.28);color:var(--gold2);border:0.5px solid rgba(201,169,110,.5);}
   .btn-mini{font-size:13px;padding:6px 10px;background:var(--bg3);border:1px solid var(--border2);color:var(--txt2);}
   .btn-accent{background:var(--gold);color:#1a1200;border-color:var(--gold);font-weight:500;}
   .btn-danger{background:rgba(224,92,92,.15);color:var(--red);border-color:rgba(224,92,92,.3);}
@@ -142,6 +143,29 @@
     <div class="modal-btns">
       <button onclick="cerrarModalPago()">Cancelar</button>
       <button class="btn-accent" onclick="confirmarPago()">Sí, confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal pago mixto -->
+<div class="modal-overlay oculto" id="modalMixtoOverlay">
+  <div class="modal">
+    <h3>Pago mixto</h3>
+    <p class="sub" id="mixtoPersonaTexto" style="margin-bottom:12px;"></p>
+    <div class="campo"><label>Monto en efectivo</label><input type="number" id="mixtoEfectivo" oninput="actualizarComparacionMixto()"></div>
+    <div class="campo"><label>Monto por Nequi</label><input type="number" id="mixtoNequi" oninput="onCambioMontoNequiMixto()"></div>
+    <div class="campo oculto" id="campoMixtoReceptor">
+      <label>¿A quién le pagó por Nequi?</label>
+      <input type="text" id="mixtoReceptor" list="listaReceptoresDatalist" placeholder="Nombre de quien recibió">
+    </div>
+    <div class="campo oculto" id="campoMixtoNequiOrigen">
+      <label>Cuenta o titular Nequi de quien envió (opcional)</label>
+      <input type="text" id="mixtoNequiOrigen" placeholder="Ej: 300 123 4567 - Juan Pérez">
+    </div>
+    <p class="sub" id="mixtoComparacion" style="margin-bottom:6px;"></p>
+    <div class="modal-btns">
+      <button onclick="cerrarModalMixto()">Cancelar</button>
+      <button class="btn-accent" onclick="confirmarMixto()">Confirmar</button>
     </div>
   </div>
 </div>
@@ -262,6 +286,7 @@ var CONFIG = {
 
 var estado = { personas: [], pagosHoy: [], receptoresHoy: [], turnoFecha: null, cicloTerminado: false, hoy: '' };
 var pagoEnCurso = null; // {persona, metodo}
+var mixtoEnCurso = null; // persona
 var confirmCallback = null;
 
 // ---------- PIN ----------
@@ -309,8 +334,18 @@ function fechaBonitaJS(str){
   return partes[2] + '/' + partes[1] + '/' + partes[0];
 }
 
+function pagosDe(personaId){
+  return estado.pagosHoy.filter(function(p){ return p.PersonaID === personaId; });
+}
 function pagoDe(personaId){
-  return estado.pagosHoy.find(function(p){ return p.PersonaID === personaId; });
+  return pagosDe(personaId)[0];
+}
+function estadoPagoPersona(personaId){
+  var pagos = pagosDe(personaId);
+  if(!pagos.length) return null;
+  var metodos = Array.from(new Set(pagos.map(function(p){return p.Metodo;})));
+  if(pagos.length > 1 || metodos.length > 1) return { tipo: 'mixto', pagos: pagos };
+  return { tipo: pagos[0].Metodo, pago: pagos[0] };
 }
 
 // ---------- RENDER PRINCIPAL ----------
@@ -382,16 +417,19 @@ function renderListaPersonas(){
   }).sort(function(a,b){ return a.Nombre.localeCompare(b.Nombre); });
 
   var html = lista.map(function(p){
-    var pago = pagoDe(p.ID);
+    var estadoP = estadoPagoPersona(p.ID);
     var pill, acciones = '';
-    if(!pago){
+    if(!estadoP){
       pill = '<span class="pill pill-pend">Pendiente</span>';
       acciones = '<button class="btn-mini" onclick="iniciarPago(\''+p.ID+'\',\'Efectivo\')">Efectivo</button>'+
-                 '<button class="btn-mini" onclick="iniciarPago(\''+p.ID+'\',\'Nequi\')">Nequi</button>';
-    } else if(pago.Metodo === 'Efectivo'){
+                 '<button class="btn-mini" onclick="iniciarPago(\''+p.ID+'\',\'Nequi\')">Nequi</button>'+
+                 '<button class="btn-mini" onclick="iniciarMixto(\''+p.ID+'\')">Mixto</button>';
+    } else if(estadoP.tipo === 'mixto'){
+      pill = '<span class="pill pill-mixto">Mixto ✓</span>';
+    } else if(estadoP.tipo === 'Efectivo'){
       pill = '<span class="pill pill-ok">Efectivo ✓</span>';
     } else {
-      pill = '<span class="pill pill-nequi">Nequi ✓ a '+pago.ReceptorNombre+'</span>';
+      pill = '<span class="pill pill-nequi">Nequi ✓ a '+estadoP.pago.ReceptorNombre+'</span>';
     }
     return '<div class="fila-persona"><div><p class="nombre">'+p.Nombre+'</p><p class="sub">'+fmt(p.CuotaTotal)+' · '+(p.LugarTrabajo||'sin lugar')+'</p></div>'+
       '<div style="display:flex;align-items:center;gap:6px;">'+pill+acciones+'</div></div>';
@@ -403,7 +441,7 @@ function renderListaPersonas(){
 function renderHistorial(){
   var pagos = estado.pagosHoy.slice().reverse();
   document.getElementById('historial').innerHTML = pagos.map(function(p){
-    return '<div class="hist-item"><span>'+p.PersonaNombre+' · '+p.Metodo+(p.ReceptorNombre?' a '+p.ReceptorNombre:'')+(p.NequiOrigen?' ('+p.NequiOrigen+')':'')+' · '+fechaBonitaJS(p.Fecha)+' '+p.Hora+'</span>'+
+    return '<div class="hist-item"><span>'+p.PersonaNombre+' · '+p.Metodo+(p.EsMixto?' (mixto)':'')+(p.ReceptorNombre?' a '+p.ReceptorNombre:'')+(p.NequiOrigen?' ('+p.NequiOrigen+')':'')+' · '+fmt(p.Monto)+' · '+fechaBonitaJS(p.Fecha)+' '+p.Hora+'</span>'+
       '<span><a href="#" onclick="abrirEditarPago(\''+p.ID+'\');return false;">Editar</a></span></div>';
   }).join('') || '<p class="sub">Sin pagos aún.</p>';
 }
@@ -411,14 +449,77 @@ function renderHistorial(){
 // ---------- REGISTRAR PAGO ----------
 function iniciarPago(personaId, metodo){
   var persona = estado.personas.find(function(p){return p.ID===personaId;});
-  var pagoExistente = pagoDe(personaId);
-  if(pagoExistente){
-    abrirModalConfirm('Esta persona ya tiene un pago registrado hoy ('+pagoExistente.Metodo+', '+fmt(pagoExistente.Monto)+'). ¿Deseas registrar otro pago de todas formas?', function(ok){
+  var existentes = pagosDe(personaId);
+  if(existentes.length){
+    var totalExistente = existentes.reduce(function(s,p){return s+Number(p.Monto);},0);
+    abrirModalConfirm('Esta persona ya tiene '+existentes.length+' pago(s) registrado(s) hoy por un total de '+fmt(totalExistente)+'. ¿Deseas registrar otro pago de todas formas?', function(ok){
       if(ok) abrirModalPago(persona, metodo);
     });
   } else {
     abrirModalPago(persona, metodo);
   }
+}
+
+function iniciarMixto(personaId){
+  var persona = estado.personas.find(function(p){return p.ID===personaId;});
+  var existentes = pagosDe(personaId);
+  if(existentes.length){
+    var totalExistente = existentes.reduce(function(s,p){return s+Number(p.Monto);},0);
+    abrirModalConfirm('Esta persona ya tiene '+existentes.length+' pago(s) registrado(s) hoy por un total de '+fmt(totalExistente)+'. ¿Deseas registrar un pago mixto adicional de todas formas?', function(ok){
+      if(ok) abrirModalMixto(persona);
+    });
+  } else {
+    abrirModalMixto(persona);
+  }
+}
+
+function abrirModalMixto(persona){
+  mixtoEnCurso = persona;
+  document.getElementById('mixtoPersonaTexto').textContent = persona.Nombre + ' debe pagar ' + fmt(persona.CuotaTotal) + '.';
+  document.getElementById('mixtoEfectivo').value = '';
+  document.getElementById('mixtoNequi').value = '';
+  document.getElementById('mixtoReceptor').value = '';
+  document.getElementById('mixtoNequiOrigen').value = '';
+  document.getElementById('listaReceptoresDatalist').innerHTML = estado.receptoresHoy.map(function(r){return '<option value="'+r.Nombre+'">';}).join('');
+  document.getElementById('campoMixtoReceptor').classList.add('oculto');
+  document.getElementById('campoMixtoNequiOrigen').classList.add('oculto');
+  actualizarComparacionMixto();
+  document.getElementById('modalMixtoOverlay').classList.remove('oculto');
+}
+function cerrarModalMixto(){ document.getElementById('modalMixtoOverlay').classList.add('oculto'); mixtoEnCurso = null; }
+
+function onCambioMontoNequiMixto(){
+  var montoNequi = Number(document.getElementById('mixtoNequi').value) || 0;
+  document.getElementById('campoMixtoReceptor').classList.toggle('oculto', montoNequi <= 0);
+  document.getElementById('campoMixtoNequiOrigen').classList.toggle('oculto', montoNequi <= 0);
+  actualizarComparacionMixto();
+}
+
+function actualizarComparacionMixto(){
+  if(!mixtoEnCurso) return;
+  var ef = Number(document.getElementById('mixtoEfectivo').value) || 0;
+  var nq = Number(document.getElementById('mixtoNequi').value) || 0;
+  var suma = ef + nq;
+  var esperado = Number(mixtoEnCurso.CuotaTotal) || 0;
+  var texto = 'Total ingresado: ' + fmt(suma) + ' de ' + fmt(esperado) + ' esperados';
+  if(suma === esperado) texto += ' ✓';
+  else if(suma < esperado) texto += ' (faltan ' + fmt(esperado-suma) + ')';
+  else texto += ' (sobran ' + fmt(suma-esperado) + ')';
+  document.getElementById('mixtoComparacion').textContent = texto;
+}
+
+function confirmarMixto(){
+  var ef = Number(document.getElementById('mixtoEfectivo').value) || 0;
+  var nq = Number(document.getElementById('mixtoNequi').value) || 0;
+  if(ef<=0 && nq<=0){ abrirModalConfirm('Debes ingresar al menos un monto, en efectivo o por Nequi.', function(){}); return; }
+  postAction('registrarPagoMixto', {
+    PersonaID: mixtoEnCurso.ID,
+    PersonaNombre: mixtoEnCurso.Nombre,
+    MontoEfectivo: ef,
+    MontoNequi: nq,
+    ReceptorNombre: nq>0 ? document.getElementById('mixtoReceptor').value : '',
+    NequiOrigen: nq>0 ? document.getElementById('mixtoNequiOrigen').value : ''
+  }).then(function(){ cerrarModalMixto(); });
 }
 
 function abrirModalPago(persona, metodo){
