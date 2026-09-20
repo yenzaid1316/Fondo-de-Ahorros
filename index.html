@@ -67,6 +67,7 @@
   #pinScreen p{color:var(--txt2);}
   #pinScreen input{font-size:24px;text-align:center;letter-spacing:8px;width:160px;}
   .oculto{display:none !important;}
+  #avisoExito{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--gold);color:var(--gold2);padding:12px 20px;border-radius:var(--r2);z-index:90;font-weight:500;text-align:center;max-width:92%;box-shadow:0 4px 16px rgba(0,0,0,.4);}
   .list-persona-admin{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:14px;color:var(--txt2);}
 </style>
 </head>
@@ -80,6 +81,7 @@
   <p id="pinError" style="color:var(--red);font-size:13px;"></p>
 </div>
 
+<div id="avisoExito" class="oculto"></div>
 <div id="app" class="oculto">
   <header>
     <h1>Control de cobros</h1>
@@ -110,7 +112,7 @@
     <div class="acciones">
       <button onclick="abrirModalPDF()">Generar PDF</button>
       <button onclick="abrirGestionPersonas()">Gestionar personas</button>
-      <button class="btn-danger" onclick="iniciarCerrarSemana()">Cerrar semana</button>
+      <button class="btn-danger" id="btnCerrarSemana" onclick="iniciarCerrarSemana()">Cerrar semana</button>
     </div>
   </div>
 </div>
@@ -604,9 +606,33 @@ function iniciarCerrarSemana(){
   abrirModalConfirm('¿Ya generaste y guardaste los PDF de esta semana?', function(ok){
     if(!ok) return;
     abrirModalConfirm('¿Seguro que quieres cerrar esta semana? Esto marca como completado el turno actual y borra los '+estado.pagosHoy.length+' registros de pago acumulados. Esta acción no se puede deshacer.', function(ok2){
-      if(ok2) postAction('cerrarSemana', {});
+      if(ok2) ejecutarCierreSemana();
     });
   });
+}
+
+function ejecutarCierreSemana(){
+  var btn = document.getElementById('btnCerrarSemana');
+  if(btn.disabled) return;
+  var textoOriginal = btn.textContent;
+  var nombresCierre = estado.receptoresHoy.map(function(r){return r.Nombre;}).join(', ') || 'el turno actual';
+  btn.disabled = true; btn.textContent = 'Cerrando...';
+  postAction('cerrarSemana', {}).then(function(data){
+    btn.disabled = false; btn.textContent = textoOriginal;
+    if(!data.error){
+      mostrarAviso('✅ Semana cerrada — turno de ' + nombresCierre + ' completado.');
+    }
+  }).catch(function(){
+    btn.disabled = false; btn.textContent = textoOriginal;
+  });
+}
+
+function mostrarAviso(texto){
+  var el = document.getElementById('avisoExito');
+  el.textContent = texto;
+  el.classList.remove('oculto');
+  clearTimeout(window._avisoTimeout);
+  window._avisoTimeout = setTimeout(function(){ el.classList.add('oculto'); }, 5000);
 }
 
 function iniciarFinalizarCiclo(){
